@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8" /><title>Bitcrush Qwen3 engine test</title>
+<style>body{font:13px/1.5 ui-monospace,Consolas,monospace;background:#0d1117;color:#adbac7;padding:20px}h1{color:#e6edf3;font-size:15px}.pass{color:#3fb950;font-weight:bold}.fail{color:#f85149;font-weight:bold}.txt{color:#d2a8ff}</style>
+</head>
+<body>
+<h1>Bitcrush — WebGPU Qwen3-0.6B engine: correctness + live quantization</h1>
+<pre id="out">loading…
+</pre>
+<script type="module">
+import * as engine from "./qwen3.mjs?v=15";
+const { loadModel, forward, generate, argmax, setQuant } = engine;
+const el = document.getElementById("out");
+const log = (...a) => { const s = a.join(" "); console.log(s); el.textContent += s + "\n"; };
+const maxAbs = (a, b) => { let m = 0; for (let i = 0; i < a.length; i++) { const d = Math.abs(a[i]-b[i]); if (d>m) m=d; } return m; };
+const maxRel = (a, b) => { let m = 0; for (let i = 0; i < a.length; i++) { const d = Math.abs(a[i]-b[i])/(Math.abs(b[i])+1e-2); if (d>m) m=d; } return m; };
+const bin = async (u) => new Float32Array(await (await fetch(u)).arrayBuffer());
+
+// minimal byte-level BPE decoder (GPT-2/Qwen scheme) so we can eyeball degradation as English text
+function makeByteDecoder() {
+  const bs = []; for (let i=33;i<=126;i++) bs.push(i); for (let i=161;i<=172;i++) bs.push(i); for (let i=174;i<=255;i++) bs.push(i);
+  const cs = bs.slice(); let n=0;
+  for (let b=0;b<256;b++) if (!bs.includes(b)) { bs.push(b); cs.push(256+n); n++; }
+  const map = {}; for (let i=0;i<bs.length;i++) map[String.fromCharCode(cs[i])] = bs[i];
+  return map;
+}
+
+try {
+  const ref = await (await fetch("./weights-qwen3/reference.json")).json();
+  window.__ref = ref;
+  log("prompt:", JSON.stringify(ref.prompt), " ids:", ref.input_ids.join(","));
+  log("prefetching reference tensors + vocab…");
+  const refEmbed = await bin("./weights-qwen3/" + ref.embed_file);
+  const refLayer0 = await bin("./weights-qwen3/" + ref.layer0_file);
+  const refLogits = await bin("./weights-qwen3/" + ref.logits_file);
+  const js = {}; for (const nm of ["h1","qroped","kroped","attn","ao","mo"]) js[nm] = await bin("./weights-qwen3/js_"+nm+".bin");
+  const vocab = await (await fetch("./tok-qwen3/vocab.json")).json();
+  const inv = {}; for (const k in vocab) inv[vocab[k]] = k;
+  const bmap = makeByteDecoder();
+  const decode = (ids) => { const bytes = []; for (const id of ids) { const t = inv[id] ?? ""; for (const ch of t) bytes.push(bmap[ch] ?? 0); } return new TextDecoder().decode(new Uint8Array(bytes)); };
+
+  const model = await loadModel("./weights-qwen3/", log);
+  window.__model = model; window.__engine = engine;
+
+  // ---- 1. fp16 prefill forward vs PyTorch ----
+  log("\n[1] fp16 prefill forward…");
+  const { logits, debug } = await forward(model, ref.input_ids, { debug: true });
+  const lMaxAbs = maxAbs(logits, refLogits);
+  log("  logits maxAbs " + lMaxAbs.toExponential(3) + "  maxRel " + maxRel(logits, refLogits).toExponential(3)
+    + "  (layer0 " + maxAbs(debug.layer0, refLayer0).toExponential(2) + ", mo " + maxAbs(debug.mo, js.mo).toExponential(2) + ")");
+  const am = argmax(logits), exp = ref.top5_next[0].id;
+  log("  argmax " + am + " (expected " + exp + ") " + (am===exp?"✓":"✗"));
+  const prefillOk = am===exp && lMaxAbs < 2.0;
+
+  // ---- 2. live quantization sweep: fp16 → 8 → 4 → 3 → 2 bits, decoded to English ----
+  // window.bench(bits, group, n): set precision, greedy-generate, decode. Reusable without reloading.
+  const N = 24;
+  window.bench = async (bits, group=64, n=N) => {
+    setQuant(model, bits, group);
+    const t = performance.now();
+    const gen = await generate(model, ref.input_ids, n);
+    const ms = performance.now() - t;
+    const want = ref.greedy_new_ids.slice(0, n);
+    let gm = 0; for (let i=0;i<Math.min(gen.length,want.length);i++){ if(gen[i]===want[i]) gm++; else break; }
+    return { bits, group, gen, text: decode(gen), matchFp: gm, ms, msPerTok: ms/n };
+  };
+  log("\n[2] live quantization sweep — same prompt, precision falling (group=64 'smart'):");
+  const sweep = [];
+  for (const bits of [16, 8, 4, 3, 2]) {
+    const b = await window.bench(bits, 64);
+    sweep.push(b);
+    log(`  [${String(bits).padStart(2)}-bit] ${b.msPerTok.toFixed(0)}ms/tok  matchFp16=${b.matchFp}/${N}`);
+    log(`    “${b.text.replace(/\n/g,'⏎')}”`);
+  }
+  log("\n  naive vs smart @ 3-bit (per-channel vs group-64):");
+  const naive3 = await window.bench(3, 0);   log(`    naive(per-ch): “${naive3.text.replace(/\n/g,'⏎')}”`);
+  const smart3 = sweep.find(s=>s.bits===3);   log(`    smart(g=64):   “${smart3.text.replace(/\n/g,'⏎')}”`);
+
+  // ---- 3. precision restores cleanly: back to fp16 must reproduce PyTorch greedy exactly ----
+  const restore = await window.bench(16, 0, 8);
+  const restoreOk = restore.matchFp >= 8;
+  log("\n[3] restore fp16 → greedy match " + restore.matchFp + "/8 " + (restoreOk?"✓":"✗"));
+
+  const bits8 = sweep.find(s=>s.bits===8);
+  const q8ok = bits8.matchFp >= 6;   // 8-bit is near-lossless → proves matmul_q is correct
+  const ok = prefillOk && restoreOk && q8ok;
+  el.className = ok ? "pass" : "fail";
+  log("\nRESULT " + (ok
+    ? "PASS ✓ — fp16 matches PyTorch, 8-bit≈lossless (matmul_q correct), quant restores cleanly"
+    : "FAIL ✗ — prefillOk=" + prefillOk + " q8ok=" + q8ok + " restoreOk=" + restoreOk));
+  window.__sweep = sweep;
+} catch (e) { el.className = "fail"; log("RESULT ERROR " + (e.message||e)); console.error(e); }
+</script>
+</body>
+</html>

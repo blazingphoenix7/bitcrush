@@ -1,0 +1,16 @@
+# Python
+quant/.venv/
+**/__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+
+# Exported model weights (1.2 GB — hosted on Hugging Face, regenerable via quant/export_qwen3i.py)
+web/weights/
+web/weights-qwen3/
+
+# OS
+.DS_Store
+Thumbs.db
