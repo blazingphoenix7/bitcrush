@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>BITCRUSH BC-06 — lobotomize a live AI with a lever</title>
+<meta name="description" content="A real 596-million-parameter language model running entirely in your browser on WebGPU. Slam the lever from 16 bits down to 2 and watch it lose its mind — live, on your words." />
+<meta property="og:title" content="BITCRUSH BC-06 — how few bits does a mind need?" />
+<meta property="og:description" content="A real LLM runs in your browser. A lever strips bits off every weight, live. It still talks at 3 bits. At 2, it speaks in tongues." />
+<meta property="og:type" content="website" />
+<meta name="theme-color" content="#e6decb" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 9'%3E%3Crect width='7' height='9' fill='%23f5efe0'/%3E%3Cg fill='%23262019'%3E%3Crect x='1' y='1' width='4' height='1'/%3E%3Crect x='1' y='2' width='1' height='1'/%3E%3Crect x='5' y='2' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='5' y='3' width='1' height='1'/%3E%3Crect x='1' y='4' width='4' height='1'/%3E%3Crect x='1' y='5' width='1' height='1'/%3E%3Crect x='5' y='5' width='1' height='1'/%3E%3Crect x='1' y='6' width='1' height='1'/%3E%3Crect x='5' y='6' width='1' height='1'/%3E%3Crect x='1' y='7' width='3' height='1'/%3E%3C/g%3E%3Crect x='4' y='7' width='1' height='1' fill='%23e0442a'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="./machine.css?v=2" />
+</head>
+<body>
+<a class="skip" href="#lever">skip to the lever</a>
+
+<header class="site-top">
+  <h1>HOW FEW BITS DOES A <span class="redword">MIND</span> NEED?</h1>
+  <p class="sub">a real language model, running in your browser, being slowly lobotomized by a lever</p>
+</header>
+
+<main class="bench">
+  <!-- ═══ THE MACHINE ═══ -->
+  <section class="device" id="device" aria-label="BITCRUSH BC-06 neural compression unit">
+    <button class="screw s-tl" tabindex="-1" aria-hidden="true"></button>
+    <button class="screw s-tr" tabindex="-1" aria-hidden="true"></button>
+    <button class="screw s-bl" tabindex="-1" aria-hidden="true"></button>
+    <button class="screw s-br" tabindex="-1" aria-hidden="true"></button>
+
+    <div class="plate-top">
+      <div class="brand">
+        <div id="pixelmark" aria-label="BITCRUSH"></div>
+        <div class="brand-sub">BC-06 · NEURAL COMPRESSION UNIT</div>
+      </div>
+      <div class="vents" aria-hidden="true"></div>
+      <div class="top-switches">
+        <div class="switch-unit">
+          <span>SPEAKER</span>
+          <button class="rocker" id="swSound" aria-pressed="false" aria-label="Speaker on/off"></button>
+        </div>
+        <div class="switch-unit">
+          <span>LAB LIGHTS</span>
+          <button class="rocker" id="swLights" aria-pressed="true" aria-label="Lab lights on/off"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mainrow">
+      <div class="left">
+        <div class="crt-bezel">
+          <div class="crt" id="crt">
+            <div class="crt-inner" id="crtInner">
+              <div class="bootlog" id="bootlog"></div>
+              <div class="chat" id="chat" hidden>
+                <div class="q" id="qEcho"></div>
+                <div class="ans" id="ans"><span id="outStream"></span><span class="cur" id="cursor" hidden></span></div>
+                <div class="ghostline" id="ghostLine"></div>
+              </div>
+            </div>
+            <div class="ekg-wrap"><canvas id="ekg"></canvas></div>
+            <div class="statusline"><span id="stTok">—</span><span class="st-state" id="stState">BOOTING</span></div>
+          </div>
+        </div>
+
+        <div class="askrow">
+          <div class="tape-input">
+            <span class="tp-label">INPUT</span>
+            <input id="prompt" maxlength="160" spellcheck="false" autocomplete="off"
+                   value="Give me a quick pep talk for my job interview tomorrow."
+                   placeholder="ASK THE SUBJECT ANYTHING" aria-label="Ask the subject anything" />
+          </div>
+          <div class="arcade-unit">
+            <button class="arcade" id="askBtn" aria-label="Ask"></button>
+            <span>ASK</span>
+          </div>
+        </div>
+
+        <div class="presets">
+          <span class="presets-lab">PRESETS</span>
+          <button class="chip" data-q="Give me a quick pep talk for my job interview tomorrow.">PEP TALK</button>
+          <button class="chip" data-q="Why is the sky blue?">WHY IS THE SKY BLUE</button>
+          <button class="chip" data-q="Write a haiku about the ocean.">OCEAN HAIKU</button>
+        </div>
+      </div>
+
+      <div class="lever-unit">
+        <span class="lu-lab">PRECISION</span>
+        <div class="lever" id="lever" role="slider" tabindex="0"
+             aria-label="Precision lever — bits per weight" aria-valuemin="2" aria-valuemax="16" aria-valuenow="16" aria-valuetext="16 bits per weight">
+          <div class="scale" id="leverScale" aria-hidden="true"></div>
+          <div class="slot"><div class="redzone"></div></div>
+          <span class="rz-lab" aria-hidden="true">LOBOTOMY</span>
+          <div class="cap" id="cap"></div>
+        </div>
+        <span class="lu-lab crush">CRUSH</span>
+        <button class="tape" id="tape">DO NOT GO<br/>BELOW 3 ⚠</button>
+      </div>
+    </div>
+
+    <div class="deck">
+      <div class="module m-bits">
+        <label>BITS / WEIGHT</label>
+        <div class="lcd"><div id="seg"></div></div>
+        <div class="sub-lab">PER WEIGHT · ALL 196 MATRICES</div>
+      </div>
+
+      <div class="module m-vu">
+        <label>COHERENCE</label>
+        <svg class="vusvg" viewBox="0 0 200 112" aria-hidden="true">
+          <rect class="vu-face" x="2" y="2" width="196" height="108" rx="10"></rect>
+          <path class="vu-arc red"   d="M36.1 55.3 A78 78 0 0 1 70.8 27.7"></path>
+          <path class="vu-arc amb"   d="M70.8 27.7 A78 78 0 0 1 110.9 22.8"></path>
+          <path class="vu-arc green" d="M110.9 22.8 A78 78 0 0 1 163.9 55.3"></path>
+          <line class="vu-tick" x1="45.9" y1="62.1" x2="39.4" y2="57.6"></line>
+          <line class="vu-tick" x1="69.5" y1="41.5" x2="65.8" y2="34.4"></line>
+          <line class="vu-tick" x1="100" y1="34" x2="100" y2="26"></line>
+          <line class="vu-tick" x1="130.5" y1="41.5" x2="134.2" y2="34.4"></line>
+          <line class="vu-tick" x1="154.1" y1="62.1" x2="160.6" y2="57.6"></line>
+          <text class="vu-num" x="30" y="76" text-anchor="middle">0</text>
+          <text class="vu-num" x="170" y="76" text-anchor="middle">100</text>
+          <text class="vu-title" x="100" y="92" text-anchor="middle">SIGNAL INTEGRITY</text>
+          <g id="needle" style="transform-origin: 100px 100px;">
+            <line x1="100" y1="100" x2="100" y2="27"></line>
+            <circle class="counter" cx="100" cy="100" r="6.5"></circle>
+          </g>
+        </svg>
+        <div class="vu-readout"><span id="cohNum">—</span> %</div>
+      </div>
+
+      <div class="module m-size">
+        <label>BRAIN SIZE</label>
+        <div class="ledbar" id="ledbar" aria-hidden="true"></div>
+        <div class="lcd small"><span id="mbNum">····</span><small>MB ON GPU</small></div>
+      </div>
+
+      <div class="module m-status">
+        <label>SUBJECT STATUS</label>
+        <ul class="leds" id="statusLeds">
+          <li data-s="lucid" style="--led:#45d465"><i></i>LUCID</li>
+          <li data-s="slurring" style="--led:#ffb02e"><i></i>SLURRING</li>
+          <li data-s="salad" style="--led:#ff7a2e"><i></i>WORD SALAD</li>
+          <li data-s="static" style="--led:#ff4030"><i></i>STATIC</li>
+        </ul>
+        <div class="minileds">
+          <span id="ledThink"><i></i>THINKING</span>
+          <span id="ledGhost"><i></i>GHOST SCAN</span>
+        </div>
+      </div>
+
+      <div class="module m-mode">
+        <label>QUANT MODE</label>
+        <button class="bigswitch" id="modeSwitch" data-mode="smart" aria-label="Quantization mode: smart" aria-pressed="true">
+          <span class="s-naive">NAIVE</span><span class="s-smart">SMART</span>
+          <div class="paddle" aria-hidden="true"></div>
+        </button>
+        <div class="micro">Same bits, spent well or badly. Flip it at 3 bits.</div>
+      </div>
+
+      <div class="module m-scope">
+        <label>WEIGHT SCOPE · LAYER 0 · Q-PROJ · <span id="scopeInfo">—</span></label>
+        <canvas id="scope"></canvas>
+        <div class="micro" id="scopeMicro">8,192 real weights from the live model. Vertical lines = every value this precision can store; the bell must pile onto them. <b>Amber = what rounding threw away.</b> NAIVE spaces the lines evenly; SMART packs them where the weights actually live.</div>
+      </div>
+    </div>
+
+    <div class="plate-bot">
+      <span class="serial">BC-06 · SN 0000-0596-M · MADE OF MATH · NO REFUNDS</span>
+      <div class="barcode" aria-hidden="true"></div>
+      <span class="plate-spacer"></span>
+      <button class="stamp" id="stamp" tabindex="-1">QA<br/>PASSED<br/>’26</button>
+    </div>
+  </section>
+
+  <!-- museum placard -->
+  <aside class="placard">
+    <p><strong>EXHIBIT BC-06.</strong> The subject is <em>Qwen3-0.6B</em> — a real 596-million-parameter language model running entirely in this tab, on your GPU, through a hand-written WebGPU engine. No server. No API. The lever re-quantizes all 196 weight matrices <em>live</em>, from 16 bits per weight down to 2. It still forms sentences at 3 bits. At 2, the lights stay on but nobody’s home.</p>
+    <div class="pl-actions">
+      <button class="chip" id="copyLink">COPY LINK</button>
+      <a class="chip" href="https://github.com/blazingphoenix7/bitcrush" id="srcLink" target="_blank" rel="noreferrer">SOURCE ★</a>
+      <span class="pl-perf" id="perfNote"></span>
+    </div>
+  </aside>
+</main>
+
+<div class="sr-live" aria-live="polite" id="srLive"></div>
+<noscript><p style="text-align:center;font-family:monospace">BC-06 requires JavaScript (and WebGPU).</p></noscript>
+<script type="module" src="./machine.mjs?v=8"></script>
+</body>
+</html>
