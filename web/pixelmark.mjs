@@ -18,6 +18,7 @@ export function createPixelmark(el, text = "BITCRUSH", px = 4) {
   const cols = text.length * 6 - 1, rows = 7;
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("viewBox", `0 0 ${cols * px} ${rows * px}`);
+  svg.setAttribute("shape-rendering", "crispEdges");   // pixels are the point — no antialiased mush
   svg.classList.add("pixelmark-svg");
   const pixels = [];
   let cx = 0;

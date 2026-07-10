@@ -141,13 +141,13 @@ fn lmhead(@builtin(global_invocation_id) g: vec3<u32>) {
   ho[v] = acc;
 }
 
-// lm_head for a RANGE of rows [r0, r0+R) → out [R][V]. For the teacher-forced ghost (logits at every
-// generated position in one pass, not just the last).
-struct LhrP { r0:u32, R:u32, C:u32, V:u32 };
+// lm_head for a RANGE of rows [r0, r0+R) → out rows at [oOff, oOff+R) of the output. Chunkable so the
+// teacher-forced ghost can submit in slices and let user work interleave on the GPU queue.
+struct LhrP { r0:u32, R:u32, C:u32, V:u32, oOff:u32, _a:u32, _b:u32, _c:u32 };
 @group(0) @binding(0) var<uniform> hrp: LhrP;
 @group(0) @binding(1) var<storage, read> hrx: array<f32>;    // hidden [T][C]
 @group(0) @binding(2) var<storage, read> hremb: array<f32>;  // embed [V][C]
-@group(0) @binding(3) var<storage, read_write> hro: array<f32>;  // [R][V]
+@group(0) @binding(3) var<storage, read_write> hro: array<f32>;  // [Rtotal][V]
 // 2D dispatch: x over V (in 64-thread groups), y over R rows — keeps each dim under the 65535 workgroup cap.
 @compute @workgroup_size(64, 1, 1)
 fn lmhead_range(@builtin(global_invocation_id) g: vec3<u32>) {
@@ -156,7 +156,7 @@ fn lmhead_range(@builtin(global_invocation_id) g: vec3<u32>) {
   let xoff = (hrp.r0 + r)*hrp.C; let eb = v*hrp.C;
   var acc = 0.0;
   for (var c=0u; c<hrp.C; c++) { acc += hrx[xoff+c]*hremb[eb+c]; }
-  hro[r*hrp.V + v] = acc;
+  hro[(hrp.oOff + r)*hrp.V + v] = acc;
 }
 
 // Live re-quant, memory-light: keep ONE master copy, precompute per-group (scale, zero), and
@@ -388,10 +388,12 @@ async function runTokens(model, tokenIds, kv, opts = {}) {
   const uRopeQ = u([Tq, nH, hd, 0, posBase], [[3, theta]]), uRopeK = u([Tq, nKV, hd, 0, posBase], [[3, theta]]);
   const uAttn = u([Tq, nH, nKV, hd, posBase]);
   const uAddC = u([Tq * C, 0, 0, 0]), uSilu = u([Tq * Cmlp, 0, 0, 0]);
-  const bits = model.qbits;
+  // Snapshot the precision for this whole pass — a setQuant() landing mid-flight (e.g. the user slams
+  // the lever while the ghost is scanning) must not split-brain the layers of one forward.
+  const useQuant = model.quantized, bits = model.qbits;
   // A Linear matmul at the active precision: full-precision plain matmul, or on-the-fly dequant (matmul_q).
   const mm = (name, xb, yb, K, N) => {
-    if (model.quantized) run(ctx, pipes.matmul_q, [u([Tq, K, N, model._G[name], bits]), xb, W[name].buf, model.scales[name], model.zeros[name], yb], Tq*N);
+    if (useQuant) run(ctx, pipes.matmul_q, [u([Tq, K, N, model._G[name], bits]), xb, W[name].buf, model.scales[name], model.zeros[name], yb], Tq*N);
     else run(ctx, pipes.matmul, [u([Tq, K, N, 0]), xb, W[name].buf, yb], Tq*N);
   };
 
@@ -421,6 +423,9 @@ async function runTokens(model, tokenIds, kv, opts = {}) {
     mm(p+"mlp.down_proj.weight", gate, tmp, Cmlp, C); await dbg("mo", tmp, Tq*C);
     run(ctx, pipes.add, [uAddC, x, tmp], Tq*C);
     if (opts.debug && L === 0) { flush(ctx); debug.layer0 = await readBuf(device, x, Tq * C); }
+    // cooperative mode (ghost scan): submit in slices and yield, so a user generation that starts
+    // mid-pass interleaves on the GPU queue instead of waiting ~7s behind one giant batch
+    if (opts.onYield && (L + 1) % (opts.yieldEvery || 4) === 0 && L < nL - 1) { flush(ctx); await opts.onYield(); }
   }
 
   run(ctx, pipes.rmsnorm, [uRms, x, W["model.norm.weight"].buf, xf], Tq);
@@ -428,12 +433,18 @@ async function runTokens(model, tokenIds, kv, opts = {}) {
   flush(ctx);                                     // submit the whole forward as one batch
   const out = await readBuf(device, logits, V);   // its own encoder; ordered after the flush
 
-  // teacher-forced ghost: logits at every position in [fromPos, Tq) from the same xf, one extra pass
+  // teacher-forced ghost: logits at every position in [fromPos, Tq) from the same xf, chunked so it
+  // never monopolizes the queue
   if (opts.allLogitsFrom !== undefined) {
     const r0 = opts.allLogitsFrom, R = Tq - r0, allBuf = sbuf(device, R * V);
-    const ctx2 = { device, enc: device.createCommandEncoder() };
-    run2d(ctx2, pipes.lmhead_range, [ubuf(device, [r0, R, C, V]), xf, W["model.embed_tokens.weight"].buf, allBuf], Math.ceil(V / 64), R);
-    flush(ctx2);
+    const CH = opts.onYield ? 8 : R;               // row slices only in cooperative mode
+    for (let c0 = 0; c0 < R; c0 += CH) {
+      const rows = Math.min(CH, R - c0);
+      const ctx2 = { device, enc: device.createCommandEncoder() };
+      run2d(ctx2, pipes.lmhead_range, [ubuf(device, [r0 + c0, rows, C, V, c0]), xf, W["model.embed_tokens.weight"].buf, allBuf], Math.ceil(V / 64), rows);
+      flush(ctx2);
+      if (opts.onYield && c0 + CH < R) await opts.onYield();
+    }
     const flat = await readBuf(device, allBuf, R * V);
     allBuf.destroy();
     debug.allLogits = []; for (let r = 0; r < R; r++) debug.allLogits.push(flat.slice(r * V, (r + 1) * V));
@@ -448,10 +459,16 @@ async function runTokens(model, tokenIds, kv, opts = {}) {
 // so the UI can show "the word fp16 would have said" wherever the crushed model diverged.
 export async function teacherForce(model, fullIds, fromPos) {
   model.quantized = false;                        // the ghost is always full precision
+  // in a visible tab, yield between slices so a fresh user generation interleaves within ~1s;
+  // hidden tabs have no user mid-drag (and throttle timers), so run as one fast batch there
+  const onYield = typeof document !== "undefined" && !document.hidden
+    ? () => new Promise((r) => setTimeout(r, 0)) : null;
   try {
     const kv = createKV(model, fullIds.length);
-    try { const { debug } = await runTokens(model, fullIds, kv, { allLogitsFrom: fromPos }); return debug.allLogits; }
-    finally { kv.destroy(); }
+    try {
+      const { debug } = await runTokens(model, fullIds, kv, { allLogitsFrom: fromPos, onYield, yieldEvery: 4 });
+      return debug.allLogits;
+    } finally { kv.destroy(); }
   } finally {
     // re-derive rather than restore a snapshot — setQuant may have run mid-scan
     model.quantized = model.qbits > 0 && model.qbits < 16;
