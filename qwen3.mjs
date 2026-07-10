@@ -230,16 +230,34 @@ function f16ToF32Array(u16) {
   for (let i = 0; i < u16.length; i++) out[i] = t[u16[i]];
   return out;
 }
-async function fetchWithProgress(url, onProgress) {
+// Stream a URL into `buf` starting at `offset`; onBytes(n) per chunk. Returns bytes written.
+async function fetchInto(url, buf, offset, onBytes) {
   const res = await fetch(url);
-  const total = +res.headers.get("Content-Length") || 0;
-  if (!res.body || !total) return await res.arrayBuffer();
-  // Preallocate the full buffer and copy each chunk straight in — avoids holding both a
-  // chunks[] array AND a concatenated copy (~2x the file size transiently, which OOM'd the iGPU).
-  const buf = new Uint8Array(total);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   const reader = res.body.getReader();
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf.set(value, offset + n); n += value.length;
+    onBytes?.(value.length);
+  }
+  return n;
+}
+// Fetch the weight master into ONE preallocated buffer (no transient 2x copy — that OOM'd the iGPU).
+// Hosts that can't serve a 1.2 GB file (GitHub Pages caps files at 100 MB) ship it as qwen3.bin.000…
+// parts, declared by `parts` in the manifest; local dev keeps the single file.
+async function fetchWeights(baseUrl, manifest, onProgress) {
+  const total = Math.max(...manifest.tensors.map((t) => t.offset + t.bytes));
+  const buf = new Uint8Array(total);
   let received = 0;
-  for (;;) { const { done, value } = await reader.read(); if (done) break; buf.set(value, received); received += value.length; onProgress?.(received / total); }
+  const onBytes = (n) => { received += n; onProgress?.(received / total); };
+  if (manifest.parts) {
+    for (let i = 0; i < manifest.parts; i++)
+      await fetchInto(baseUrl + "qwen3.bin." + String(i).padStart(3, "0"), buf, received, onBytes);
+  } else {
+    await fetchInto(baseUrl + "qwen3.bin", buf, 0, onBytes);
+  }
   return buf.buffer;
 }
 
@@ -253,7 +271,7 @@ export async function loadModel(baseUrl, opts = {}) {
 
   log("fetching model…");
   const manifest = await (await fetch(baseUrl + "manifest.json")).json();
-  const bin = await fetchWithProgress(baseUrl + "qwen3.bin", opts.onProgress);
+  const bin = await fetchWeights(baseUrl, manifest, opts.onProgress);
   log(`uploading ${(bin.byteLength / 1e6).toFixed(0)}MB to GPU…`);
 
   const W = {};

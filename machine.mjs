@@ -2,7 +2,7 @@
 // One lever drives everything: the WGSL weight re-quantizer, the 7-seg, the scope, the wordmark
 // pixels, the LEDs, the sound. The text on the CRT is REAL inference — never faked, never styled
 // into fake degradation. The machine is the fiction; the model is the fact.
-import { loadModel, generate, setQuant, quantNames, teacherForce, sampleWeights, argmax, argmaxMasked } from "./qwen3.mjs?v=17";
+import { loadModel, generate, setQuant, quantNames, teacherForce, sampleWeights, argmax, argmaxMasked } from "./qwen3.mjs?v=18";
 import { loadTokenizer } from "./qwen3-tok.mjs?v=1";
 import { createSeg7 } from "./seg7.mjs?v=1";
 import { createPixelmark } from "./pixelmark.mjs?v=2";
@@ -27,9 +27,10 @@ const SYS_PROMPT = "You are a helpful assistant. Always respond in English.";
 let CHAT_PREFIX = [];                             // built once the tokenizer is up
 const CHAT_SUFFIX = [151645, 198, 151644, 77091, 198, 151667, 271, 151668, 271];
 const EOS = [151645];
-// weights: local copy in dev; Hugging Face CDN in production (1.2 GB doesn't belong in a git repo)
+// weights: local single-file copy in dev; on the deployed site, same-origin 95 MB parts on the
+// gh-pages branch (GitHub Pages caps files at 100 MB; release assets lack CORS for browser fetch)
 const WEIGHTS_LOCAL = "./weights-qwen3/";
-const WEIGHTS_REMOTE = "https://huggingface.co/blazingphoenix7/bitcrush-bc06/resolve/main/";
+const WEIGHTS_REMOTE = "./weights-remote/";
 async function weightsBase() {
   try { const r = await fetch(WEIGHTS_LOCAL + "manifest.json", { method: "HEAD" }); if (r.ok) return WEIGHTS_LOCAL; } catch {}
   return WEIGHTS_REMOTE;
