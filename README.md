@@ -2,7 +2,7 @@
 
 **A real language model runs in your browser. A lever lobotomizes it, live.**
 
-<!-- demo GIF goes here before launch -->
+![The BC-06 crushing a live model from 16 bits to 2](demo.gif)
 
 **🔗 Try it: [blazingphoenix7.github.io/bitcrush](https://blazingphoenix7.github.io/bitcrush/)** — needs a WebGPU browser (Chrome/Edge desktop) and ~1.2 GB of patience on first load.
 
