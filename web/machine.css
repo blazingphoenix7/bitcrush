@@ -105,6 +105,7 @@ body.dark .site-top .sub { color: rgba(216, 208, 188, .72); }
 /* ═══ THE DEVICE ═══════════════════════════════════════════════════════════ */
 .device {
   position: relative;
+  user-select: none;                /* chrome is hardware, not prose — only the CRT text + input stay copyable */
   width: min(1080px, 100%);
   background: linear-gradient(178deg, var(--shell-hi) 0%, var(--shell) 34%, var(--shell-lo) 100%);
   border: 2px solid var(--ink);
@@ -221,6 +222,7 @@ body.dark .site-top .sub { color: rgba(216, 208, 188, .72); }
 
 .crt-inner {
   position: relative; z-index: 1; flex: 1;
+  user-select: text;                /* the subject's words are copyable */
   padding: 16px 18px 8px;
   font: 500 14.5px/1.65 var(--mono);
   color: var(--phos);
@@ -274,7 +276,7 @@ body.dark .site-top .sub { color: rgba(216, 208, 188, .72); }
 }
 .tape-input .tp-label { font: 700 8.5px var(--mono); color: #8d8471; letter-spacing: .14em; margin-right: 10px; user-select: none; }
 .tape-input input {
-  flex: 1; background: none; border: 0; outline: 0;
+  flex: 1; background: none; border: 0; outline: 0; user-select: text;
   font: 600 13.5px var(--mono); letter-spacing: .02em;
   color: #f2ead2; text-shadow: 0 1px 0 rgba(0, 0, 0, .8);
   padding: 12px 8px 12px 0; min-width: 0;
@@ -510,6 +512,9 @@ body.dark .site-top .sub { color: rgba(216, 208, 188, .72); }
 .placard em { font-style: normal; font-weight: 700; }
 .placard .pl-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .placard .pl-perf { font: 600 10px var(--mono); color: var(--ink-faint); letter-spacing: .05em; margin-left: auto; }
+
+/* while a lever drag is live, nothing on the page may select */
+body.dragging, body.dragging * { user-select: none !important; cursor: grabbing !important; }
 
 /* ── focus / motion / responsive ──────────────────────────────────────────── */
 :is(button, input, .lever, a):focus-visible { outline: 3px dashed var(--red); outline-offset: 3px; border-radius: 4px; }

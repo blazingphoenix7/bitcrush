@@ -473,9 +473,14 @@ export async function forward(model, tokenIds, opts = {}) {
 }
 
 export function argmax(a) { let k = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[k]) k = i; return k; }
-function argmaxExcluding(a, banned) {
+// argmax skipping a Uint8Array ban mask (1 = never emit) and/or an explicit id list
+export function argmaxMasked(a, mask, banned) {
   let k = -1;
-  for (let i = 0; i < a.length; i++) { if (banned.includes(i)) continue; if (k < 0 || a[i] > a[k]) k = i; }
+  for (let i = 0; i < a.length; i++) {
+    if (mask && mask[i]) continue;
+    if (banned && banned.includes(i)) continue;
+    if (k < 0 || a[i] > a[k]) k = i;
+  }
   return k;
 }
 
@@ -486,10 +491,10 @@ export async function generate(model, tokenIds, nNew, opts = {}) {
   try {
     let { logits } = await runTokens(model, tokenIds, kv);   // prefill → distribution for the first new token
     for (let s = 0; s < nNew; s++) {
-      let next = argmax(logits);
+      let next = opts.banMask ? argmaxMasked(logits, opts.banMask, null) : argmax(logits);
       if (opts.eosIds && opts.eosIds.includes(next)) {
         // standard min-new-tokens: mask EOS early so an answer can't end after 3 tokens
-        if (gen.length < (opts.minNew || 0)) next = argmaxExcluding(logits, opts.eosIds);
+        if (gen.length < (opts.minNew || 0)) next = argmaxMasked(logits, opts.banMask, opts.eosIds);
         else break;                                           // stop at end-of-turn; don't emit the token
       }
       gen.push(next);

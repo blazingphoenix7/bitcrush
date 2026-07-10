@@ -2,7 +2,7 @@
 // One lever drives everything: the WGSL weight re-quantizer, the 7-seg, the scope, the wordmark
 // pixels, the LEDs, the sound. The text on the CRT is REAL inference — never faked, never styled
 // into fake degradation. The machine is the fiction; the model is the fact.
-import { loadModel, generate, setQuant, quantNames, teacherForce, sampleWeights, argmax } from "./qwen3.mjs?v=15";
+import { loadModel, generate, setQuant, quantNames, teacherForce, sampleWeights, argmax, argmaxMasked } from "./qwen3.mjs?v=16";
 import { loadTokenizer } from "./qwen3-tok.mjs?v=1";
 import { createSeg7 } from "./seg7.mjs?v=1";
 import { createPixelmark } from "./pixelmark.mjs?v=1";
@@ -20,8 +20,11 @@ const BMIN = 2, BMAX = 16, EXP = 2.6;            // lever gamma: the bottom half
 const N_TOKENS = 44, MIN_NEW = 12;
 const SMART_GROUP = 64;
 const ENT_LO = 1.6, ENT_HI = 6.5;
-// Qwen3 chat template (thinking off): <|im_start|>user\n{q}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
-const CHAT_PREFIX = [151644, 872, 198];
+// Qwen3 chat template (thinking off), with a system message anchoring English:
+// <|im_start|>system\n{SYS}<|im_end|>\n<|im_start|>user\n{q}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
+// Composed at boot via the tokenizer (verified identical to transformers' apply_chat_template).
+const SYS_PROMPT = "You are a helpful assistant. Always respond in English.";
+let CHAT_PREFIX = [];                             // built once the tokenizer is up
 const CHAT_SUFFIX = [151645, 198, 151644, 77091, 198, 151667, 271, 151668, 271];
 const EOS = [151645];
 // weights: local copy in dev; Hugging Face CDN in production (1.2 GB doesn't belong in a git repo)
@@ -45,9 +48,22 @@ let promptText = "", promptIds = [];
 let genCtl = null, commitTimer = 0, ghostTimer = 0;
 let quantParams = 0, embedBytes = 0, size16 = 1;
 let lastMsPerTok = 0, wasCrushedTo2 = false;
+let engLock = true, banMask = null;               // ENG LOCK: decode-time ban on non-Latin tokens (a labeled switch, not a silent filter)
 const cache = new Map();                          // key → { tokens, ents }
 const ghostCache = new Map();                     // key → [{i, word}]
 const sound = createSound();
+
+// Tokens allowed under ENG LOCK: ASCII + Latin-1/Extended letters + common typography.
+// Anything else (CJK, Cyrillic, Arabic, kana, emoji, stray multi-byte fragments) is banned at argmax.
+function buildLatinBanMask(vocabSize) {
+  const banned = /[^\x00-\x7F\u00A0-\u024F\u1E00-\u1EFF\u2000-\u206F]/u;
+  const m = new Uint8Array(vocabSize);
+  for (let id = 0; id < vocabSize; id++) {
+    const s = tok.decodeOne(id);
+    if (s && banned.test(s)) m[id] = 1;           // ids that decode to "" (special ids, incl. EOS) stay allowed
+  }
+  return m;
+}
 
 let seg, mark, scope, ekg;
 
@@ -112,7 +128,7 @@ function setHealth(coh) {
 
 /* ── generation ───────────────────────────────────────────────────────────── */
 const promptKey = () => promptIds.join(",");
-const curKey = () => `${promptKey()}|${committedBits}|${mode}`;
+const curKey = () => `${promptKey()}|${committedBits}|${mode}|${engLock ? "L" : "U"}`;
 
 function reencodePrompt() {
   promptText = $("prompt").value.trim() || "Give me a quick pep talk for my job interview tomorrow.";
@@ -169,7 +185,7 @@ async function commit(bInt) {
   const t0 = performance.now();
   try {
     await generate(model, promptIds, N_TOKENS, {
-      signal, eosIds: EOS, minNew: MIN_NEW,
+      signal, eosIds: EOS, minNew: MIN_NEW, banMask: engLock ? banMask : null,
       onToken: (id, gen, logits) => {
         if (signal.aborted) return;
         const ent = entropyOf(logits);
@@ -228,8 +244,9 @@ async function runGhost(key, tokens) {
   try {
     const all = await teacherForce(model, promptIds.concat(tokens), promptIds.length - 1);
     const divs = [];
+    const lock = key.endsWith("|L");               // the ghost plays by the same decode rules as the run it haunts
     for (let i = 0; i < tokens.length; i++) {
-      const meant = argmax(all[i]);
+      const meant = lock ? argmaxMasked(all[i], banMask, null) : argmax(all[i]);
       if (meant !== tokens[i]) divs.push({ i, word: tok.decodeOne(meant) });
     }
     ghostCache.set(key, divs);
@@ -289,9 +306,13 @@ function leverFrac(e) {
 let dragging = false, lastDetent = BMAX;
 function onDown(e) {
   if (!ready) return;
+  e.preventDefault();                              // don't start a text selection under the drag
+  document.body.classList.add("dragging");
+  const lever = $("lever");
+  lever.focus({ preventScroll: true });            // preventDefault suppressed click-focus; keep arrows working
   dragging = true;
-  $("lever").classList.add("grabbing");
-  try { $("lever").setPointerCapture(e.pointerId); } catch {}
+  lever.classList.add("grabbing");
+  try { lever.setPointerCapture(e.pointerId); } catch {}
   onMove(e);
 }
 function onMove(e) {
@@ -302,6 +323,7 @@ function onMove(e) {
   if (d !== lastDetent) { lastDetent = d; sound.detent(); navigator.vibrate?.(5); }
 }
 function onUp() {
+  document.body.classList.remove("dragging");
   if (!dragging) return;
   dragging = false;
   $("lever").classList.remove("grabbing");
@@ -401,6 +423,10 @@ async function boot() {
   bootLine("  MOUNTING 596,049,920 PARAMETERS ... OK", "ok");
   tok = await loadTokenizer("./tok-qwen3/");
   bootLine("  TOKENIZER · 151,643 ENTRIES ....... OK", "ok");
+  // chat template with the English-anchoring system message (verified == transformers' output)
+  CHAT_PREFIX = [151644, ...tok.encode("system\n" + SYS_PROMPT), 151645, 198, 151644, ...tok.encode("user\n")];
+  banMask = buildLatinBanMask(model.cfg.vocab_size);
+  bootLine("  LANGUAGE LOCK .......... ENGAGED", "ok");
 
   for (const n of quantNames(model.cfg)) { const [N, K] = model.W[n].shape; quantParams += N * K; }
   embedBytes = model.W["model.embed_tokens.weight"].shape.reduce((a, b) => a * b, 1) * 2;
@@ -416,6 +442,7 @@ async function boot() {
     const h = new URLSearchParams(location.hash.slice(1));
     if (h.get("q")) $("prompt").value = h.get("q").slice(0, 160);
     if (h.get("m") === "naive") setMode("naive", true);
+    if (h.get("l") === "0") { engLock = false; $("swLock").setAttribute("aria-pressed", "false"); }
     const hb = parseInt(h.get("b") || "", 10);
     if (hb >= BMIN && hb <= BMAX) targetDetent = hb;
   } catch {}
@@ -481,6 +508,12 @@ function wire() {
     slamTo(2);
   });
 
+  $("swLock").addEventListener("click", (e) => {
+    engLock = e.currentTarget.getAttribute("aria-pressed") !== "true";
+    e.currentTarget.setAttribute("aria-pressed", String(engLock));
+    sound.clunk();
+    if (ready) commit(committedBits);              // decode rules changed → same settings, new run
+  });
   $("swSound").addEventListener("click", async (e) => {
     const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
     e.currentTarget.setAttribute("aria-pressed", String(on));
@@ -501,7 +534,7 @@ function wire() {
   });
 
   $("copyLink").addEventListener("click", async () => {
-    const h = `#b=${committedBits}&m=${mode}&q=${encodeURIComponent($("prompt").value.trim())}`;
+    const h = `#b=${committedBits}&m=${mode}${engLock ? "" : "&l=0"}&q=${encodeURIComponent($("prompt").value.trim())}`;
     history.replaceState(null, "", h);              // the URL is shareable even if the clipboard says no
     const c = $("copyLink");
     try {
@@ -527,7 +560,8 @@ boot();
 window.__bc = {
   commit, slamTo, nudge, setMode,
   get bits() { return bits; }, get committed() { return committedBits; }, get mode() { return mode; },
-  get ready() { return ready; }, cache, ghostCache,
+  get ready() { return ready; }, get engLock() { return engLock; }, get banMask() { return banMask; },
+  cache, ghostCache,
   get model() { return model; }, get promptIds() { return promptIds; },
   teacherForce, sampleWeights,
 };
