@@ -10,7 +10,7 @@
 <meta property="og:type" content="website" />
 <meta name="theme-color" content="#e6decb" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 9'%3E%3Crect width='7' height='9' fill='%23f5efe0'/%3E%3Cg fill='%23262019'%3E%3Crect x='1' y='1' width='4' height='1'/%3E%3Crect x='1' y='2' width='1' height='1'/%3E%3Crect x='5' y='2' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='5' y='3' width='1' height='1'/%3E%3Crect x='1' y='4' width='4' height='1'/%3E%3Crect x='1' y='5' width='1' height='1'/%3E%3Crect x='5' y='5' width='1' height='1'/%3E%3Crect x='1' y='6' width='1' height='1'/%3E%3Crect x='5' y='6' width='1' height='1'/%3E%3Crect x='1' y='7' width='3' height='1'/%3E%3C/g%3E%3Crect x='4' y='7' width='1' height='1' fill='%23e0442a'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="./machine.css?v=4" />
+<link rel="stylesheet" href="./machine.css?v=5" />
 </head>
 <body>
 <a class="skip" href="#lever">skip to the lever</a>
@@ -111,8 +111,9 @@
 
       <div class="module m-vu">
         <label>COHERENCE</label>
-        <svg class="vusvg" viewBox="0 0 200 112" aria-hidden="true">
-          <rect class="vu-face" x="2" y="2" width="196" height="108" rx="10"></rect>
+        <!-- pivot lives at y=100, below the 88-tall viewBox — cropped like a real VU movement -->
+        <svg class="vusvg" viewBox="0 0 200 88" aria-hidden="true">
+          <rect class="vu-face" x="2" y="2" width="196" height="120" rx="10"></rect>
           <path class="vu-arc red"   d="M36.1 55.3 A78 78 0 0 1 70.8 27.7"></path>
           <path class="vu-arc amb"   d="M70.8 27.7 A78 78 0 0 1 110.9 22.8"></path>
           <path class="vu-arc green" d="M110.9 22.8 A78 78 0 0 1 163.9 55.3"></path>
@@ -121,9 +122,9 @@
           <line class="vu-tick" x1="100" y1="34" x2="100" y2="26"></line>
           <line class="vu-tick" x1="130.5" y1="41.5" x2="134.2" y2="34.4"></line>
           <line class="vu-tick" x1="154.1" y1="62.1" x2="160.6" y2="57.6"></line>
-          <text class="vu-num" x="30" y="76" text-anchor="middle">0</text>
-          <text class="vu-num" x="170" y="76" text-anchor="middle">100</text>
-          <text class="vu-title" x="100" y="92" text-anchor="middle">SIGNAL INTEGRITY</text>
+          <text class="vu-num" x="27" y="80" text-anchor="middle">0</text>
+          <text class="vu-num" x="173" y="80" text-anchor="middle">100</text>
+          <text class="vu-title" x="100" y="83" text-anchor="middle">SIGNAL INTEGRITY</text>
           <g id="needle" style="transform-origin: 100px 100px; transform: rotate(-55deg);">
             <line x1="100" y1="100" x2="100" y2="27"></line>
             <circle class="counter" cx="100" cy="100" r="6.5"></circle>
@@ -189,6 +190,6 @@
 
 <div class="sr-live" aria-live="polite" id="srLive"></div>
 <noscript><p style="text-align:center;font-family:monospace">BC-06 requires JavaScript (and WebGPU).</p></noscript>
-<script type="module" src="./machine.mjs?v=10"></script>
+<script type="module" src="./machine.mjs?v=12"></script>
 </body>
 </html>

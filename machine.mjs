@@ -297,7 +297,8 @@ function buildScale() {
     if (majors.has(b)) {
       const n = document.createElement("span");
       n.className = "tick-num" + (b <= 3 ? " hot" : "");
-      n.style.setProperty("--p", p);
+      // clamp the endpoint numerals so 16 and 2 don't clip past the track ends
+      n.style.setProperty("--p", clamp(bitsToFrac(b) * 100, 2.5, 97.5).toFixed(2) + "%");
       n.textContent = b;
       wrap.appendChild(n);
     }
@@ -399,6 +400,12 @@ async function boot() {
 
   bootLine("BITCRUSH BC-06 · NEURAL COMPRESSION UNIT");
   bootLine("FIRMWARE 1.0 · POWER-ON SELF-TEST", "");
+  if (new URLSearchParams(location.search).has("nomodel")) {   // layout-QA mode: full chrome, no 1.2 GB subject
+    bootLine("  TEST MODE — SUBJECT NOT LOADED", "fail");
+    setLever(3);                                   // park the cap somewhere meaningful for geometry checks
+    setHealth(0.62);
+    return;
+  }
   if (!navigator.gpu) {
     bootLine("  WEBGPU ................. FAIL", "fail");
     bootLine("");
