@@ -10,7 +10,7 @@
 <meta property="og:type" content="website" />
 <meta name="theme-color" content="#e6decb" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 9'%3E%3Crect width='7' height='9' fill='%23f5efe0'/%3E%3Cg fill='%23262019'%3E%3Crect x='1' y='1' width='4' height='1'/%3E%3Crect x='1' y='2' width='1' height='1'/%3E%3Crect x='5' y='2' width='1' height='1'/%3E%3Crect x='1' y='3' width='1' height='1'/%3E%3Crect x='5' y='3' width='1' height='1'/%3E%3Crect x='1' y='4' width='4' height='1'/%3E%3Crect x='1' y='5' width='1' height='1'/%3E%3Crect x='5' y='5' width='1' height='1'/%3E%3Crect x='1' y='6' width='1' height='1'/%3E%3Crect x='5' y='6' width='1' height='1'/%3E%3Crect x='1' y='7' width='3' height='1'/%3E%3C/g%3E%3Crect x='4' y='7' width='1' height='1' fill='%23e0442a'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="./machine.css?v=2" />
+<link rel="stylesheet" href="./machine.css?v=3" />
 </head>
 <body>
 <a class="skip" href="#lever">skip to the lever</a>
@@ -35,6 +35,10 @@
       </div>
       <div class="vents" aria-hidden="true"></div>
       <div class="top-switches">
+        <div class="switch-unit">
+          <span>ENG LOCK</span>
+          <button class="rocker" id="swLock" aria-pressed="true" aria-label="English lock: bans non-Latin tokens at decode time"></button>
+        </div>
         <div class="switch-unit">
           <span>SPEAKER</span>
           <button class="rocker" id="swSound" aria-pressed="false" aria-label="Speaker on/off"></button>
@@ -174,7 +178,7 @@
 
   <!-- museum placard -->
   <aside class="placard">
-    <p><strong>EXHIBIT BC-06.</strong> The subject is <em>Qwen3-0.6B</em> — a real 596-million-parameter language model running entirely in this tab, on your GPU, through a hand-written WebGPU engine. No server. No API. The lever re-quantizes all 196 weight matrices <em>live</em>, from 16 bits per weight down to 2. It still forms sentences at 3 bits. At 2, the lights stay on but nobody’s home.</p>
+    <p><strong>EXHIBIT BC-06.</strong> The subject is <em>Qwen3-0.6B</em> — a real 596-million-parameter language model running entirely in this tab, on your GPU, through a hand-written WebGPU engine. No server. No API. The lever re-quantizes all 196 weight matrices <em>live</em>, from 16 bits per weight down to 2. It still forms sentences at 3 bits. At 2, the lights stay on but nobody’s home. <em>ENG&nbsp;LOCK</em> pins decoding to Latin script — a brain-damaged polyglot forgets English first, so flip it off to watch the mind dissolve into Chinese instead.</p>
     <div class="pl-actions">
       <button class="chip" id="copyLink">COPY LINK</button>
       <a class="chip" href="https://github.com/blazingphoenix7/bitcrush" id="srcLink" target="_blank" rel="noreferrer">SOURCE ★</a>
@@ -185,6 +189,6 @@
 
 <div class="sr-live" aria-live="polite" id="srLive"></div>
 <noscript><p style="text-align:center;font-family:monospace">BC-06 requires JavaScript (and WebGPU).</p></noscript>
-<script type="module" src="./machine.mjs?v=8"></script>
+<script type="module" src="./machine.mjs?v=9"></script>
 </body>
 </html>
