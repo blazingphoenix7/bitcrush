@@ -47,7 +47,7 @@ cd bitcrush/web
 python serve.py        # threaded static server → http://localhost:8123/
 ```
 
-Weights auto-fetch from Hugging Face on first load (or drop a local export into `web/weights-qwen3/`). It runs on an Intel iGPU — a discrete GPU is just faster.
+Weights auto-fetch from this repo's release assets on first load (or drop a local export into `web/weights-qwen3/`). It runs on an Intel iGPU — a discrete GPU is just faster.
 
 Regenerating the model export (optional, needs Python + PyTorch):
 

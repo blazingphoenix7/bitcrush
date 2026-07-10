@@ -7,9 +7,11 @@ quant/.venv/
 node_modules/
 dist/
 
-# Exported model weights (1.2 GB — hosted on Hugging Face, regenerable via quant/export_qwen3i.py)
+# Model weights (1.2 GB single file for dev; 95 MB parts live only on the gh-pages branch)
 web/weights/
 web/weights-qwen3/
+web/weights-remote/
+.ghp/
 
 # OS
 .DS_Store
