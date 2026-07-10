@@ -544,21 +544,24 @@ body.dragging, body.dragging * { user-select: none !important; cursor: grabbing 
   .plate-top { flex-wrap: wrap; gap: 12px; }
   .vents { display: none; }
 
-  /* the lever lies down */
-  .lever-unit { flex-direction: row; align-items: center; gap: 4px; padding: 10px 12px; }
-  .lever { min-height: 84px; height: 84px; margin: 0 6px; }
-  .lever .scale { inset: auto 0 4px 0; width: auto; height: 26px; }
-  .lever .tick { top: auto; bottom: 10px; left: var(--p); width: 1.5px; height: 8px; transform: translateX(-50%); }
-  .lever .tick.major { bottom: 6px; height: 13px; width: 2px; }
-  .lever .tick-num { top: auto; bottom: -6px; left: var(--p); transform: translateX(-50%); }
-  .lever .slot { top: 50%; bottom: auto; left: 4px; right: 4px; width: auto; height: 30px; transform: translateY(-78%); }
+  /* the lever lies down: labels take the corners, the track takes the full width */
+  .lever-unit { flex-direction: column; align-items: stretch; gap: 4px; padding: 10px 12px 8px; }
+  .lu-lab { align-self: flex-start; }
+  .lu-lab.crush { align-self: flex-end; }
+  .lever { min-height: 96px; height: 96px; margin: 0; }
+  .lever .scale { inset: auto 0 0 0; width: auto; height: 30px; }
+  .lever .tick { top: auto; bottom: 16px; left: var(--p); width: 1.5px; height: 8px; transform: translateX(-50%); }
+  .lever .tick.major { bottom: 14px; height: 12px; width: 2px; }
+  .lever .tick-num { top: auto; bottom: -2px; left: var(--p); transform: translateX(-50%); }
+  /* horizontal track: slot center and cap center are BOTH y=31 — aligned by construction */
+  .lever .slot { top: 16px; bottom: auto; left: 2px; right: 2px; width: auto; height: 30px; transform: none; }
   .lever .slot::before { left: 8px; right: 8px; top: 50%; bottom: auto; width: auto; height: 4px; transform: translateY(-50%); }
   .lever .redzone { top: 2px; bottom: 2px; left: var(--rz); right: 2px; border-top: 0; border-left: 2px solid var(--red); border-radius: 0 7px 7px 0; }
-  .lever .rz-lab { writing-mode: horizontal-tb; right: 2px; top: -12px; letter-spacing: .18em; }
-  .lever .cap { top: 50%; left: var(--p); transform: translate(-50%, -78%); width: 46px; height: 62px; }
+  .lever .rz-lab { display: none; }               /* the hatching + red numerals carry it on small screens */
+  .lever .cap { top: 31px; left: var(--p); transform: translate(-50%, -50%); width: 46px; height: 58px; }
   .lever .cap::before { inset: 10px 8px; background: repeating-linear-gradient(90deg, rgba(38,32,25,.28) 0 1.5px, transparent 1.5px 6px); }
   .lever .cap::after { left: 50%; right: auto; top: 5px; bottom: 5px; width: 4px; height: auto; transform: translateX(-50%); }
-  .tape { right: 8px; bottom: auto; top: -14px; }
+  .tape { right: 6px; bottom: auto; top: -10px; }
 
   .deck { grid-template-columns: 1fr 1fr; }
   .m-scope { grid-column: 1 / -1; }
