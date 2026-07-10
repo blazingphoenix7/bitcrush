@@ -2,10 +2,10 @@
 // One lever drives everything: the WGSL weight re-quantizer, the 7-seg, the scope, the wordmark
 // pixels, the LEDs, the sound. The text on the CRT is REAL inference — never faked, never styled
 // into fake degradation. The machine is the fiction; the model is the fact.
-import { loadModel, generate, setQuant, quantNames, teacherForce, sampleWeights, argmax, argmaxMasked } from "./qwen3.mjs?v=16";
+import { loadModel, generate, setQuant, quantNames, teacherForce, sampleWeights, argmax, argmaxMasked } from "./qwen3.mjs?v=17";
 import { loadTokenizer } from "./qwen3-tok.mjs?v=1";
 import { createSeg7 } from "./seg7.mjs?v=1";
-import { createPixelmark } from "./pixelmark.mjs?v=1";
+import { createPixelmark } from "./pixelmark.mjs?v=2";
 import { createScope } from "./scope.mjs?v=1";
 import { createEkg } from "./ekg.mjs?v=1";
 import { createSound } from "./sound.mjs?v=1";
@@ -49,6 +49,7 @@ let genCtl = null, commitTimer = 0, ghostTimer = 0;
 let quantParams = 0, embedBytes = 0, size16 = 1;
 let lastMsPerTok = 0, wasCrushedTo2 = false;
 let engLock = true, banMask = null;               // ENG LOCK: decode-time ban on non-Latin tokens (a labeled switch, not a silent filter)
+let touchedLever = false, firstAnswerDone = false; // for the one-time "grab me" pulse on the cap
 const cache = new Map();                          // key → { tokens, ents }
 const ghostCache = new Map();                     // key → [{i, word}]
 const sound = createSound();
@@ -209,6 +210,11 @@ async function commit(bInt) {
       $("perfNote").textContent = `measured live: ${lastMsPerTok} ms/token on your GPU`;
       $("srLive").textContent = `Answer at ${bInt} bits: ${tok.decode(tokens)}`;
       ghostArgs = [key, tokens];
+      // one-time invitation: if the first answer lands and the lever's never been touched, pulse the cap
+      if (!firstAnswerDone) {
+        firstAnswerDone = true;
+        if (!reducedMotion && !document.hidden) setTimeout(() => { if (!touchedLever) $("cap").classList.add("beckon"); }, 3200);
+      }
     }
   } catch (e) {
     if (!signal.aborted) { $("stTok").textContent = "ERROR"; console.error(e); }
@@ -307,6 +313,7 @@ let dragging = false, lastDetent = BMAX;
 function onDown(e) {
   if (!ready) return;
   e.preventDefault();                              // don't start a text selection under the drag
+  touchedLever = true; $("cap").classList.remove("beckon");
   document.body.classList.add("dragging");
   const lever = $("lever");
   lever.focus({ preventScroll: true });            // preventDefault suppressed click-focus; keep arrows working
@@ -333,6 +340,7 @@ function onUp() {
 }
 function nudge(d) {
   if (!ready) return;
+  touchedLever = true; $("cap").classList.remove("beckon");
   targetDetent = clamp(targetDetent + d, BMIN, BMAX);
   setLever(targetDetent);
   sound.detent(); navigator.vibrate?.(5);
@@ -401,6 +409,14 @@ async function boot() {
     return;
   }
   bootLine("  WEBGPU ................. OK", "ok");
+  // POST: sweep the status LEDs once, like real gear checking its lamps (cosmetic — never gates)
+  if (!reducedMotion && !document.hidden) {
+    const lis = [...$("statusLeds").children];
+    lis.forEach((li, i) => {
+      setTimeout(() => li.classList.add("on"), 240 + i * 130);
+      setTimeout(() => li.classList.remove("on"), 240 + i * 130 + 160);
+    });
+  }
   const wBase = await weightsBase();
   let dlLine = null, dlPending = false;
   try {
